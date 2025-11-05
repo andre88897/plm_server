@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QLabel
+    QLineEdit, QPushButton, QTableWidget
 )
 
 class MainWindowUI(QWidget):
@@ -15,20 +14,25 @@ class MainWindowUI(QWidget):
 
         # --- Barra superiore ---
         top_bar = QHBoxLayout()
-        self.input_search = QLineEdit()
-        self.input_search.setPlaceholderText("Cerca codice...")
-        self.btn_search = QPushButton("Cerca")
-        self.btn_refresh = QPushButton("Aggiorna")
         self.btn_new = QPushButton("Nuovo codice")
         top_bar.addWidget(self.btn_new)
-        top_bar.addWidget(QLabel("Codice:"))
-        top_bar.addWidget(self.input_search)
-        top_bar.addWidget(self.btn_search)
-        top_bar.addWidget(self.btn_refresh)
+        top_bar.addStretch()
         layout.addLayout(top_bar)
 
         # --- Tabella ---
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Codice", "Descrizione", "Quantità", "Ubicazione"])
+        headers = ["Codice", "Descrizione", "Quantità", "Ubicazione"]
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(1)
+
+        # riga 0 riservata ai filtri colonna per colonna
+        self.filter_inputs = []
+        for col, header in enumerate(headers):
+            filtro = QLineEdit()
+            filtro.setPlaceholderText(f"Filtro {header.lower()}...")
+            filtro.setClearButtonEnabled(True)
+            self.table.setCellWidget(0, col, filtro)
+            self.filter_inputs.append(filtro)
+
         layout.addWidget(self.table)

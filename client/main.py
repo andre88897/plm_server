@@ -7,8 +7,11 @@ class PLMClient(MainWindowUI):
     def __init__(self):
         super().__init__()
         self.api = APIClient()
-        self.btn_refresh.clicked.connect(self.carica_lista)
-        self.btn_search.clicked.connect(self.cerca_codice)
+        self._codici_cache = []
+
+        for filtro in getattr(self, "filter_inputs", []):
+            filtro.textChanged.connect(self._apply_filters)
+
         self.btn_new.clicked.connect(self.nuovo_codice)
         self.carica_lista()  # carica all'avvio
         
@@ -16,30 +19,8 @@ class PLMClient(MainWindowUI):
     def carica_lista(self):
         try:
             codici = self.api.lista_codici()
-            self.table.setRowCount(len(codici))
-            for i, c in enumerate(codici):
-                self.table.setItem(i, 0, self._item(c["codice"]))
-                self.table.setItem(i, 1, self._item(c["descrizione"]))
-                self.table.setItem(i, 2, self._item(str(c["quantita"])))
-                self.table.setItem(i, 3, self._item(c["ubicazione"]))
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Errore di connessione:\n{e}")
-
-    def cerca_codice(self):
-        codice = self.input_search.text().strip()
-        if not codice:
-            QMessageBox.warning(self, "Attenzione", "Inserisci un codice da cercare.")
-            return
-        try:
-            c = self.api.cerca_codice(codice)
-            if not c:
-                QMessageBox.information(self, "Risultato", f"Nessun codice trovato: {codice}")
-                return
-            self.table.setRowCount(1)
-            self.table.setItem(0, 0, self._item(c["codice"]))
-            self.table.setItem(0, 1, self._item(c["descrizione"]))
-            self.table.setItem(0, 2, self._item(str(c["quantita"])))
-            self.table.setItem(0, 3, self._item(c["ubicazione"]))
+            self._codici_cache = codici
+            self._apply_filters()
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore di connessione:\n{e}")
 
@@ -70,6 +51,36 @@ class PLMClient(MainWindowUI):
             QMessageBox.critical(self, "Errore", f"Impossibile creare codice:\n{e}")
 
     
+    def _apply_filters(self, *_):
+        filtri = [f.text().strip().lower() for f in getattr(self, "filter_inputs", [])]
+        filtrati = []
+
+        for codice in self._codici_cache:
+            valori = [
+                str(codice.get("codice", "")),
+                str(codice.get("descrizione", "")),
+                str(codice.get("quantita", "")),
+                str(codice.get("ubicazione", "")),
+            ]
+
+            if all((not filtro) or filtro in valore.lower() for filtro, valore in zip(filtri, valori)):
+                filtrati.append(codice)
+
+        self._mostra_codici(filtrati)
+
+
+    def _mostra_codici(self, codici):
+        # prima riga riservata ai filtri
+        offset = 1
+        self.table.setRowCount(len(codici) + offset)
+
+        for row_index, codice in enumerate(codici, start=offset):
+            self.table.setItem(row_index, 0, self._item(codice.get("codice", "")))
+            self.table.setItem(row_index, 1, self._item(codice.get("descrizione", "")))
+            self.table.setItem(row_index, 2, self._item(str(codice.get("quantita", ""))))
+            self.table.setItem(row_index, 3, self._item(codice.get("ubicazione", "")))
+
+
     def _item(self, text):
         """Crea una cella di tabella non modificabile"""
         from PySide6.QtWidgets import QTableWidgetItem
