@@ -15,20 +15,25 @@ class MainWindowUI(QWidget):
         # --- Barra superiore ---
         top_bar = QHBoxLayout()
         self.btn_new = QPushButton("Nuovo codice")
+        self.btn_load_bom = QPushButton("Carica distinta")
         top_bar.addWidget(self.btn_new)
+        top_bar.addWidget(self.btn_load_bom)
         top_bar.addStretch()
         layout.addLayout(top_bar)
 
         # --- Tabella ---
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        headers = ["Codice", "Descrizione", "Quantità", "Ubicazione"]
+        self.table.setColumnCount(5)
+        headers = ["", "Codice", "Descrizione", "Quantità", "Ubicazione"]
         self.table.setHorizontalHeaderLabels(headers)
         self.table.setRowCount(1)
 
         # riga 0 riservata ai filtri colonna per colonna
         self.filter_inputs = []
         for col, header in enumerate(headers):
+            if col == 0:
+                self.filter_inputs.append(None)
+                continue
             filtro = QLineEdit()
             filtro.setPlaceholderText(f"Filtro {header.lower()}...")
             filtro.setClearButtonEnabled(True)

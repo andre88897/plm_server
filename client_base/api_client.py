@@ -29,3 +29,22 @@ class APIClient:
         r = httpx.post(f"{self.base_url}/codici/", json=payload)
         r.raise_for_status()
         return r.json()
+
+    def aggiungi_componente(self, padre, figlio, quantita):
+        """Aggiunge un componente a una distinta base"""
+        params = {
+            "padre": padre,
+            "figlio": figlio,
+            "quantita": quantita,
+        }
+        r = httpx.post(f"{self.base_url}/distinte/", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    def distinta(self, codice):
+        """Recupera la distinta base di un codice"""
+        r = httpx.get(f"{self.base_url}/distinte/{codice}")
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        return r.json()
