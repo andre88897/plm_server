@@ -1,0 +1,12 @@
+Utilizzo server via curl
+
+| Funzione            | Metodo | Endpoint                               | Esempio                                       |
+| ------------------- | ------ | -------------------------------------- | --------------------------------------------- |
+| Lista codici        | GET    | `/codici/`                             | `curl http://127.0.0.1:8000/codici/`          |
+| Cerca codice        | GET    | `/codici/{codice}`                     | `curl http://127.0.0.1:8000/codici/03000001A` |
+| Crea codice         | POST   | `/codici/?iniziali=03&descrizione=...` | `curl -X POST ...`                            |
+| Carica file         | POST   | `/files/upload`                        | `curl -F "file=@..."`                         |
+| Scarica file        | GET    | `/files/download/{codice}`             | `curl -O ...`                                 |
+| Elenca file         | GET    | `/files/`                              | `curl http://127.0.0.1:8000/files/`           |
+| Aggiungi componente | POST   | `/distinte/?padre=...&figlio=...`      | `curl -X POST ...`                            |
+| Visualizza distinta | GET    | `/distinte/{codice}`                   | `curl -X GET ...`                             |

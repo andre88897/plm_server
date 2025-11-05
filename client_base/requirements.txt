@@ -1,0 +1,4 @@
+PySide6
+httpx
+uvicorn==0.32.0
+requests>=2.31.0
