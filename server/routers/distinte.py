@@ -6,6 +6,12 @@ router = APIRouter(prefix="/distinte", tags=["distinte"])
 
 @router.post("/")
 def aggiungi_componente(padre: str, figlio: str, quantita: float = 1.0, db: Session = Depends(database.get_db)):
+    padre = padre.strip()
+    figlio = figlio.strip()
+
+    if padre == figlio:
+        raise HTTPException(status_code=400, detail="Un codice non può essere figlio di sé stesso")
+
     codice_padre = db.query(models.Codice).filter_by(codice=padre).first()
     codice_figlio = db.query(models.Codice).filter_by(codice=figlio).first()
 

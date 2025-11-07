@@ -83,6 +83,11 @@ class BOMLoaderWindow(QDialog):
                 QMessageBox.warning(self, "Campi mancanti", "Inserisci la quantità per la riga selezionata.")
             return False
 
+        if padre == figlio:
+            if not batch:
+                QMessageBox.warning(self, "Codici non validi", "Il codice padre non può coincidere con il codice figlio.")
+            return False
+
         try:
             quantita = float(quantita_text)
         except ValueError:
