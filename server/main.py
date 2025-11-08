@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core import models, database
-from routers import codici, files, distinte
+from core.schema_utils import ensure_schema
+from routers import codici, files, distinte, revisioni, stati, form
 
 
 # ✅ Crea tabelle nel database se non esistono
 models.Base.metadata.create_all(bind=database.engine)
+ensure_schema()
 
 # ✅ Inizializza FastAPI
 app = FastAPI(
@@ -27,6 +29,9 @@ app.add_middleware(
 app.include_router(codici.router)
 app.include_router(files.router)
 app.include_router(distinte.router)
+app.include_router(revisioni.router)
+app.include_router(stati.router)
+app.include_router(form.router)
 
 # ✅ Endpoint di test
 @app.get("/")

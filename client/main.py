@@ -14,6 +14,8 @@ class PLMClient(MainWindowUI):
         self._bom_cache = {}
         self._codes_with_bom = set()
         self._bom_window = None
+        self._states = []
+        self._load_states()
 
         for filtro in getattr(self, "filter_inputs", []):
             if filtro is None:
@@ -54,8 +56,27 @@ class PLMClient(MainWindowUI):
         if not ok4:
             return
 
+        stato_names = [s.get("name", "") for s in self._states if s.get("name")] or ["concept"]
+        stato, ok5 = QInputDialog.getItem(
+            self,
+            "Stato di rilascio",
+            "Seleziona lo stato iniziale:",
+            stato_names,
+            0,
+            False,
+        )
+        if not ok5:
+            return
+
         try:
-            nuovo = self.api.crea_codice(tipo.strip(), descrizione, quantita, ubicazione)
+            nuovo = self.api.crea_codice(
+                tipo.strip(),
+                descrizione,
+                quantita,
+                ubicazione,
+                stato=stato,
+                rilascia_subito=True,
+            )
             QMessageBox.information(self, "Successo", f"Codice generato: {nuovo['codice']}")
             self.carica_lista()
         except Exception as e:
@@ -283,6 +304,12 @@ class PLMClient(MainWindowUI):
     def on_bom_row_sent(self, codice_padre):
         self._ensure_bom_cached(codice_padre, force=True)
         self._apply_filters()
+
+    def _load_states(self):
+        try:
+            self._states = self.api.lista_stati()
+        except Exception:
+            self._states = [{"name": "concept"}]
 
 
     def _item(self, text):

@@ -1,0 +1,6 @@
+# nome_stato,colore_hex
+concept,#3498db
+prototipo,#1abc9c
+industrializzato,#2ecc71
+solo per ricambi,#f1c40f
+morto,#e74c3c

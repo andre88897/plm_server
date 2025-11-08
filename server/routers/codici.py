@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from core import models, database
+from core.state_manager import resolve_state, state_color_map
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+from datetime import datetime
 
 router = APIRouter(prefix="/codici", tags=["Codici"])
 
@@ -13,13 +16,50 @@ class CodiceBase(BaseModel):
     quantita: float
     ubicazione: str
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}
+
+
+class CodiceCreate(CodiceBase):
+    stato: Optional[str] = None
+    rilascia_subito: bool = False
+
+
+class CertificazioneOut(BaseModel):
+    nome: str
+    valore: Optional[str] = None
+    ordine: int = 0
+
+
+class RevisioneFileInfo(BaseModel):
+    filename: str
+    mimetype: Optional[str] = None
+    uploaded_at: Optional[datetime] = None
+
+
+class RevisioneOut(BaseModel):
+    indice: int
+    stato: str
+    color: str
+    cad_file: Optional[str] = None
+    is_released: bool
+    released_at: Optional[datetime] = None
+    certificazione: List[CertificazioneOut]
+    files: List[RevisioneFileInfo] = []
+
+
+class FileInfo(BaseModel):
+    filename: str
+    uploaded_at: Optional[datetime] = None
+    filetype: Optional[str] = None
+
+
+class CodiceDetail(CodiceBase):
+    revisioni: List[RevisioneOut]
+    files: List[FileInfo]
 
 
 @router.post("/", response_model=CodiceBase)
-def crea_codice(codice: CodiceBase, db: Session = Depends(database.get_db)):
+def crea_codice(codice: CodiceCreate, db: Session = Depends(database.get_db)):
     """
     Crea un nuovo codice PLM:
     - L'utente specifica solo il tipo (2 cifre iniziali)
@@ -65,16 +105,99 @@ def crea_codice(codice: CodiceBase, db: Session = Depends(database.get_db)):
     db.commit()
     db.refresh(db_codice)
 
+    stato = resolve_state(codice.stato)
+    revisione = models.Revisione(
+        codice_id=db_codice.id,
+        indice=0,
+        stato=stato,
+        cad_file=None,
+        is_released=bool(codice.rilascia_subito),
+        released_at=func.now() if codice.rilascia_subito else None,
+    )
+    db.add(revisione)
+    db.commit()
+    db.refresh(db_codice)
+
     return db_codice
 
 
 @router.get("/", response_model=List[CodiceBase])
-def lista_codici(db: Session = Depends(database.get_db)):
-    return db.query(models.Codice).all()
+def lista_codici(include_unreleased: bool = False, db: Session = Depends(database.get_db)):
+    query = db.query(models.Codice)
+    if not include_unreleased:
+        query = query.join(models.Revisione).filter(models.Revisione.is_released.is_(True)).distinct()
+    return query.all()
+
 
 @router.get("/{codice}", response_model=CodiceBase)
-def leggi_codice(codice: str, db: Session = Depends(database.get_db)):
+def leggi_codice(codice: str, include_unreleased: bool = False, db: Session = Depends(database.get_db)):
     db_codice = db.query(models.Codice).filter(models.Codice.codice == codice).first()
     if not db_codice:
         raise HTTPException(status_code=404, detail="Codice non trovato")
+    if not include_unreleased:
+        released = any(rev.is_released for rev in db_codice.revisioni)
+        if not released:
+            raise HTTPException(status_code=404, detail="Codice non rilasciato")
     return db_codice
+
+
+@router.get("/{codice}/dettaglio", response_model=CodiceDetail)
+def dettaglio_codice(codice: str, include_unreleased: bool = False, db: Session = Depends(database.get_db)):
+    codice_obj = db.query(models.Codice).filter(models.Codice.codice == codice).first()
+    if not codice_obj:
+        raise HTTPException(status_code=404, detail="Codice non trovato")
+
+    if not codice_obj.revisioni:
+        default_state = resolve_state(None)
+        db_rev = models.Revisione(codice_id=codice_obj.id, indice=0, stato=default_state)
+        db.add(db_rev)
+        db.commit()
+        db.refresh(codice_obj)
+    elif not include_unreleased:
+        has_release = any(rev.is_released for rev in codice_obj.revisioni)
+        if not has_release:
+            raise HTTPException(status_code=404, detail="Codice non rilasciato")
+
+    color_map = state_color_map()
+
+    revisioni = [
+        RevisioneOut(
+            indice=rev.indice,
+            stato=rev.stato,
+            color=color_map.get(rev.stato.lower(), "#777777"),
+            cad_file=rev.cad_file,
+            is_released=rev.is_released,
+            released_at=rev.released_at,
+            certificazione=[
+                CertificazioneOut(nome=campo.nome, valore=campo.valore, ordine=campo.ordine)
+                for campo in rev.certificazione
+            ],
+            files=[
+                RevisioneFileInfo(
+                    filename=f.filename,
+                    mimetype=f.mimetype,
+                    uploaded_at=f.uploaded_at,
+                )
+                for f in rev.files
+            ],
+        )
+        for rev in codice_obj.revisioni
+    ]
+
+    files = [
+        FileInfo(
+            filename=f.filename,
+            uploaded_at=f.uploaded_at,
+            filetype=f.filetype,
+        )
+        for f in codice_obj.files
+    ]
+
+    return CodiceDetail(
+        codice=codice_obj.codice,
+        descrizione=codice_obj.descrizione,
+        quantita=codice_obj.quantita,
+        ubicazione=codice_obj.ubicazione,
+        revisioni=revisioni,
+        files=files,
+    )

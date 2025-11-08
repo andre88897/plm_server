@@ -1,0 +1,4 @@
+# nome,label
+descrizione,Descrizione
+quantita,Quantità
+ubicazione,Ubicazione
