@@ -6,6 +6,8 @@ from core.state_manager import resolve_state, state_color_map
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+from core.auth_context import require_account_context
+from core.activity_logger import log_activity
 
 router = APIRouter(prefix="/codici", tags=["Codici"])
 
@@ -59,7 +61,11 @@ class CodiceDetail(CodiceBase):
 
 
 @router.post("/", response_model=CodiceBase)
-def crea_codice(codice: CodiceCreate, db: Session = Depends(database.get_db)):
+def crea_codice(
+    codice: CodiceCreate,
+    db: Session = Depends(database.get_db),
+    account_ctx: dict = Depends(require_account_context),
+):
     """
     Crea un nuovo codice PLM:
     - L'utente specifica solo il tipo (2 cifre iniziali)
@@ -118,6 +124,7 @@ def crea_codice(codice: CodiceCreate, db: Session = Depends(database.get_db)):
     db.commit()
     db.refresh(db_codice)
 
+    log_activity(account_ctx, "codice_creato", riferimento=nuovo_codice)
     return db_codice
 
 

@@ -1,9 +1,23 @@
+import os
 import sys
-from PySide6.QtWidgets import QApplication, QMessageBox, QToolButton
-from PySide6.QtCore import Qt
+from pathlib import Path
+from PySide6.QtWidgets import QApplication, QMessageBox, QToolButton, QDialog
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont
 from ui_mainwindow import MainWindowUI
 from api_client import APIClient
 from bom_loader import BOMLoaderWindow
+from account_dialog import AccountSelectionDialog
+from account_store import (
+    load_account_context,
+    save_account_context,
+    clear_account_context,
+    load_font_scale,
+    save_font_scale,
+    load_account_password,
+    save_account_password,
+)
+from settings_dialog import SettingsDialog
 
 class PLMClient(MainWindowUI):
     def __init__(self):
@@ -15,6 +29,14 @@ class PLMClient(MainWindowUI):
         self._codes_with_bom = set()
         self._bom_window = None
         self._states = []
+        self._account_info = None
+        self._settings_dialog = None
+        self._font_scale = load_font_scale()
+        app = QApplication.instance()
+        base_font = app.font() if app else None
+        self._base_font_point_size = (base_font.pointSizeF() if base_font and base_font.pointSizeF() > 0 else 10.0)
+        self._apply_font_scale(self._font_scale)
+        self._ensure_account_session()
         self._load_states()
 
         for filtro in getattr(self, "filter_inputs", []):
@@ -24,6 +46,7 @@ class PLMClient(MainWindowUI):
 
         self.btn_new.clicked.connect(self.nuovo_codice)
         self.btn_load_bom.clicked.connect(self.apri_carica_distinta)
+        self.btn_settings.clicked.connect(self._open_settings)
         self.carica_lista()  # carica all'avvio
         
 
@@ -36,6 +59,119 @@ class PLMClient(MainWindowUI):
             self._apply_filters()
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore di connessione:\n{e}")
+
+    def _ensure_account_session(self):
+        saved = load_account_context()
+        saved_password = load_account_password()
+        if saved and saved_password:
+            if self._attempt_login(saved, saved_password, persist=False, show_errors=False):
+                return
+            save_account_password("")
+        self._prompt_account_selection()
+
+    def _prompt_account_selection(self):
+        try:
+            hierarchy = self.api.lista_account_hierarchy()
+        except Exception as exc:
+            QMessageBox.critical(self, "Connessione account", f"Impossibile scaricare la lista account:\n{exc}")
+            sys.exit(1)
+
+        if not hierarchy:
+            QMessageBox.critical(self, "Account mancanti", "Nessun account configurato sul server.")
+            sys.exit(1)
+
+        while True:
+            dialog = AccountSelectionDialog(hierarchy, self, api_client=self.api)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                QMessageBox.warning(self, "Account richiesto", "Per continuare è necessario selezionare un account.")
+                sys.exit(0)
+            selection = dialog.selected_account()
+            password = dialog.selected_password()
+            if not password:
+                QMessageBox.warning(self, "Password mancante", "Inserisci la password per continuare.")
+                continue
+            if self._attempt_login(selection, password, persist=True, show_errors=True):
+                break
+
+    def _attempt_login(self, selection, password: str, *, persist: bool, show_errors: bool) -> bool:
+        try:
+            verified = self.api.login_account(
+                selection["stabilimento"],
+                selection["gruppo"],
+                selection["account"],
+                password,
+            )
+        except Exception as exc:
+            if show_errors:
+                QMessageBox.warning(self, "Login account", f"Impossibile autenticare l'account selezionato:\n{exc}")
+            return False
+        self.api.set_account_context(verified)
+        self._account_info = verified
+        if persist:
+            save_account_context(verified)
+            save_account_password(password)
+        return True
+
+    def _apply_font_scale(self, scale: float):
+        app = QApplication.instance()
+        if not app:
+            self._font_scale = scale
+            return
+        base_size = getattr(self, "_base_font_point_size", 10.0)
+        new_font = QFont(app.font())
+        new_font.setPointSizeF(max(8.0, base_size * scale))
+        app.setFont(new_font)
+        self._font_scale = scale
+
+    def _open_settings(self):
+        if self._settings_dialog and self._settings_dialog.isVisible():
+            self._settings_dialog.raise_()
+            self._settings_dialog.activateWindow()
+            return
+        dialog = SettingsDialog(self._font_scale, self)
+        dialog.fontScaleChanged.connect(self._handle_font_scale_changed)
+        dialog.logoutRequested.connect(self._handle_logout_request)
+        self._settings_dialog = dialog
+        dialog.exec()
+        self._settings_dialog = None
+
+    def _handle_font_scale_changed(self, scale: float):
+        if abs(scale - self._font_scale) < 0.01:
+            return
+        self._apply_font_scale(scale)
+        save_font_scale(scale)
+
+    def _handle_logout_request(self):
+        confirm = QMessageBox.question(
+            self,
+            "Logout",
+            "Vuoi disconnettere l'account corrente? Dovrai effettuare nuovamente il login.",
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        self._perform_logout()
+        if self._settings_dialog:
+            self._settings_dialog.reject()
+
+    def _perform_logout(self):
+        clear_account_context()
+        self.api.set_account_context(None)
+        self._account_info = None
+        if self._bom_window:
+            self._bom_window.close()
+            self._bom_window = None
+        self._codici_cache.clear()
+        self._codici_by_code.clear()
+        self._bom_cache.clear()
+        self._codes_with_bom.clear()
+        self._clear_data_rows()
+        python = sys.executable
+        script = Path(__file__).resolve()
+
+        def _restart():
+            os.execv(python, [python, str(script)])
+
+        QTimer.singleShot(0, _restart)
 
     def nuovo_codice(self):
         from PySide6.QtWidgets import QInputDialog, QMessageBox

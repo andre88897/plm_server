@@ -18,6 +18,8 @@ class MainWindowUI(QWidget):
         self.btn_load_bom = QPushButton("Carica distinta")
         top_bar.addWidget(self.btn_new)
         top_bar.addWidget(self.btn_load_bom)
+        self.btn_settings = QPushButton("Impostazioni")
+        top_bar.addWidget(self.btn_settings)
         top_bar.addStretch()
         layout.addLayout(top_bar)
 

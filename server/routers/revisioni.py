@@ -10,6 +10,8 @@ import uuid
 from core import models, database
 from core.state_manager import resolve_state, state_color_map, state_order_map
 from core.form_manager import load_form_fields
+from core.auth_context import require_account_context
+from core.activity_logger import log_activity
 
 router = APIRouter(prefix="/revisioni", tags=["Revisioni"])
 REV_FILES_DIR = Path("uploaded_files") / "revisioni"
@@ -58,7 +60,11 @@ class ChangeStatePayload(BaseModel):
 
 
 @router.post("/", response_model=RevisioneResponse)
-def crea_revisione(payload: RevisioneCreate, db: Session = Depends(database.get_db)):
+def crea_revisione(
+    payload: RevisioneCreate,
+    db: Session = Depends(database.get_db),
+    account_ctx: dict = Depends(require_account_context),
+):
     codice_obj = db.query(models.Codice).filter_by(codice=payload.codice).first()
     if not codice_obj:
         raise HTTPException(status_code=404, detail="Codice non trovato")
@@ -89,6 +95,7 @@ def crea_revisione(payload: RevisioneCreate, db: Session = Depends(database.get_
     db.refresh(revisione)
     _clone_certificazione_from_previous(db, codice_obj.id, revisione)
 
+    log_activity(account_ctx, "revisione_creata", riferimento=f"{payload.codice}:rev{revisione.indice}")
     color = state_color_map().get(revisione.stato.lower(), "#777777")
     return RevisioneResponse(
         indice=revisione.indice,
@@ -192,7 +199,12 @@ def _clone_certificazione_from_previous(db: Session, codice_id: int, nuova_revis
 
 
 @router.post("/{codice}/{indice}/rilascio", response_model=RevisioneResponse)
-def rilascia_revisione(codice: str, indice: int, db: Session = Depends(database.get_db)):
+def rilascia_revisione(
+    codice: str,
+    indice: int,
+    db: Session = Depends(database.get_db),
+    account_ctx: dict = Depends(require_account_context),
+):
     revisione = _get_revision_or_404(db, codice, indice)
     if revisione.is_released:
         raise HTTPException(status_code=400, detail="Revisione già rilasciata")
@@ -203,6 +215,7 @@ def rilascia_revisione(codice: str, indice: int, db: Session = Depends(database.
     db.commit()
     db.refresh(revisione)
 
+    log_activity(account_ctx, "revisione_rilasciata", riferimento=f"{codice}:rev{indice}")
     color = state_color_map().get(revisione.stato.lower(), "#777777")
     return RevisioneResponse(
         indice=revisione.indice,
@@ -258,6 +271,7 @@ def salva_certificazione(
     indice: int,
     payload: CertPayload,
     db: Session = Depends(database.get_db),
+    account_ctx: dict = Depends(require_account_context),
 ):
     revisione = _get_revision_or_404(db, codice, indice)
     for campo in list(revisione.certificazione):
@@ -281,6 +295,7 @@ def salva_certificazione(
     db.commit()
     db.refresh(revisione)
 
+    log_activity(account_ctx, "certificazione_salvata", riferimento=f"{codice}:rev{indice}")
     return get_certificazione(codice, indice, db)
 
 
@@ -290,6 +305,7 @@ def cambia_stato_revisione(
     indice: int,
     payload: ChangeStatePayload,
     db: Session = Depends(database.get_db),
+    account_ctx: dict = Depends(require_account_context),
 ):
     revisione = _get_revision_or_404(db, codice, indice)
     if revisione.is_released:
@@ -311,6 +327,12 @@ def cambia_stato_revisione(
     db.commit()
     db.refresh(revisione)
 
+    log_activity(
+        account_ctx,
+        "revisione_cambia_stato",
+        riferimento=f"{codice}:rev{indice}",
+        dettagli=f"{revisione.stato}",
+    )
     color = state_color_map().get(revisione.stato.lower(), "#777777")
     return RevisioneResponse(
         indice=revisione.indice,
@@ -335,6 +357,7 @@ async def carica_file_revisione(
     indice: int,
     files: List[UploadFile] = File(...),
     db: Session = Depends(database.get_db),
+    account_ctx: dict = Depends(require_account_context),
 ):
     revisione = _get_revision_or_404(db, codice, indice)
     if revisione.is_released:
@@ -361,4 +384,10 @@ async def carica_file_revisione(
 
     db.commit()
     db.refresh(revisione)
+    log_activity(
+        account_ctx,
+        "revisione_carica_file",
+        riferimento=f"{codice}:rev{indice}",
+        dettagli=f"{len(saved_records)} file",
+    )
     return _files_payload(revisione)

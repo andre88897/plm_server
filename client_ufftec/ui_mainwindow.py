@@ -84,6 +84,13 @@ class UffTecMainWindowUI(QMainWindow):
         self.btn_change_state.setEnabled(False)
         button_bar.addWidget(self.btn_change_state)
 
+        self.btn_settings = self._build_toolbar_button(
+            object_name="btnSettings",
+            icon=self._build_settings_icon(),
+            tooltip="Impostazioni",
+        )
+        button_bar.addWidget(self.btn_settings)
+
         top_layout.addLayout(button_bar, 1)
 
         root_layout.addWidget(top_bar)
@@ -113,12 +120,16 @@ class UffTecMainWindowUI(QMainWindow):
         self.side_nav.setAlternatingRowColors(True)
         self.side_nav.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.side_nav_entries = []
+        self.side_nav_items = {}
+        self.side_nav_labels = {}
         for label in ("Home", "Lavori", "Progetti", "Colleghi"):
             key = label.lower()
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, key)
             self.side_nav.addItem(item)
             self.side_nav_entries.append((key, label))
+            self.side_nav_items[key] = item
+            self.side_nav_labels[key] = label
         self.side_nav.setCurrentRow(-1)
         self.side_nav.clearSelection()
         tabs_layout.addWidget(self.side_nav, 3)
@@ -281,6 +292,15 @@ class UffTecMainWindowUI(QMainWindow):
             }
             #btnChangeState:hover:enabled {
                 background-color: #bae6fd;
+            }
+            #btnSettings {
+                background-color: #f3f4f6;
+                border: 1px solid #cbd5f5;
+                border-radius: 50%;
+                padding: 10px;
+            }
+            #btnSettings:hover {
+                background-color: #e5e7eb;
             }
             #tabsPanel {
                 background-color: #f5f7fa;
@@ -508,6 +528,33 @@ class UffTecMainWindowUI(QMainWindow):
         painter.drawLine(16, 22, 22, 16)
         painter.end()
 
+        return QIcon(pixmap)
+
+    def _build_settings_icon(self):
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QColor("#4b5563"))
+        painter.setPen(Qt.GlobalColor.transparent)
+        painter.drawEllipse(6, 6, 20, 20)
+
+        pen = QPen(QColor("#ffffff"))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.drawEllipse(12, 12, 8, 8)
+
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        for angle in range(0, 360, 45):
+            painter.save()
+            painter.translate(16, 16)
+            painter.rotate(angle)
+            painter.drawLine(0, -10, 0, -13)
+            painter.restore()
+
+        painter.end()
         return QIcon(pixmap)
 
 

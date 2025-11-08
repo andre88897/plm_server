@@ -99,3 +99,25 @@ class Distinta(Base):
 
     padre = relationship("Codice", foreign_keys=[padre_id], backref="componenti")
     figlio = relationship("Codice", foreign_keys=[figlio_id])
+
+
+class AttivitaLog(Base):
+    __tablename__ = "attivita_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account = Column(String, nullable=False)
+    stabilimento = Column(String, nullable=False)
+    gruppo = Column(String, nullable=False)
+    azione = Column(String, nullable=False)
+    riferimento = Column(String, nullable=True)
+    dettagli = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AccountCredential(Base):
+    __tablename__ = "account_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

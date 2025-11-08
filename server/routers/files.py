@@ -1,6 +1,8 @@
 from fastapi import APIRouter, UploadFile, Form, HTTPException, Depends
 from sqlalchemy.orm import Session
 from core import models, database
+from core.auth_context import require_account_context
+from core.activity_logger import log_activity
 import os, shutil
 
 router = APIRouter(prefix="/files", tags=["Files"])
@@ -13,7 +15,8 @@ async def upload_file(
     codice: str = Form(...),
     descrizione: str = Form(""),
     file: UploadFile = None,
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(database.get_db),
+    account_ctx: dict = Depends(require_account_context),
 ):
     # verifica codice esistente
     codice_obj = db.query(models.Codice).filter(models.Codice.codice == codice).first()
@@ -36,6 +39,7 @@ async def upload_file(
     db.commit()
     db.refresh(new_file)
 
+    log_activity(account_ctx, "codice_file_caricato", riferimento=codice, dettagli=file.filename)
     return {
         "codice": codice,
         "file": file.filename,
